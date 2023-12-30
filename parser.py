@@ -7,8 +7,6 @@ import uuid
 
 
 def find_dialogue_name(string):
-    #print(string)
-    match = ...
     pattern = r'(?<=div><div class="ui_crumb" >)(.*?)(?=<\/div><\/div>)'
     try:
         match = re.search(pattern, string)
@@ -16,65 +14,69 @@ def find_dialogue_name(string):
     except Exception as e:
         match = e
         return match
-        
+
 
 def define_file_type(string):
     qm_index = string.find("?")
     if "?" not in string:
         qm_index = len(string)
-    return string[qm_index-3:qm_index]
-
-def working_with_file(fullname):
-        with open(fullname, 'r') as file:
-            while True:
-                string = file.readline()
-
-                if string.__contains__("Сообщения"):
-                    name_of_message = find_dialogue_name(string)
-                
-                if string.__contains__("userapi.com"):
-                     working_with_image_link(string, name_of_message)
-                if string == "":
-                    break
+    return string[qm_index-3:qm_index] # TODO: сделать не только расширения длиной 3 символа
 
 
-def working_with_image_link(string, name_of_message):
-                    k = 0
-                    #вычленение из строки html-кода чистой ссылки на скачивание
-                    buf = string[string.find("href='")+6:(string[string.find("href='")+6::]).find("\'")+string.find("href='")+6:]
-                    list_of_files.append(buf)    
-                   
+def parse_author_and_date(string):
+    pattern = r'<.*?>'
+    try:
+        buf = re.sub(pattern, '', string)
+        buf = buf.lstrip()
+        buf = buf.rstrip() # очистка от лишних символов
+        buf = buf.replace(":", " ") # разрешение создания названия файла
+        list = [buf[:buf.find(",")], buf[buf.find(",") + 2:]] # отделение автора сообщения и даты/времени
+        if(list[1] == ""):
+            list[1] = "default"
+        return list
+    except Exception as e:
+        return [e, e]
 
-                   #начало скачивания
-                    h = httplib2.Http('.cache')
-                    response, content = h.request(buf)
-                    
-                    image_type = define_file_type(buf)
 
-                    out = ...
-                    if os.path.exists(f'result\\{name_of_message}') == False:
-                        os.mkdir(f'result\\{name_of_message}')
-                    if os.path.exists(f'result\\{name_of_message}\\{image_type}') == False:
-                        os.mkdir(f'result\\{name_of_message}\\{image_type}')
-                    while os.path.exists(f'result\\{name_of_message}\\{image_type}\\{k}.{image_type}'):
-                        k = k + 1
-                    out = open(f'result\\{name_of_message}\\{image_type}\\{k}.{image_type}', 'wb')
-                    out.write(content)
-                    out.close()
-                
+def create_file(link, filetype, dialogue_name, author_and_date):
+    if os.path.exists(f'result\\{dialogue_name}\\{filetype}') == False: # создание папки с типом файла
+        os.mkdir(f'result\\{dialogue_name}\\{filetype}')
+    if os.path.exists(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}') == False: # создание папки с автором сообщения
+        os.mkdir(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}')
+    h = httplib2.Http('.cache') # кэширование
+    response, content = h.request(link) # запрос
+    out = open(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}\\{author_and_date[1]}.{filetype}', 'wb') # создание файла в папку
+    out.write(content)
+    out.close()
 
 
 
-names = os.listdir(os.getcwd())
-#print(names)
-list_of_files = []
-list_of_names = []
+def file_analysis(fullname):
+    #открытие файла
+    with open(fullname, 'r') as file:
+        strings = file.readlines() # чтение файла
+        dialogue_name = "default_name"
+        message_header = "default_header"
+        for string in strings:
+            if string.__contains__("message__header"): # если в строке есть класс message__header, то это строка с временем и автором сообщения
+                author_and_date = parse_author_and_date(string) # получение времени и автора сообщения
+            if string.__contains__("Сообщения"): # если в строке есть "Сообщения", то оно содержит название диалога
+                dialogue_name = find_dialogue_name(string) # получение названия диалога
+                if os.path.exists(os.getcwd() + f'\\result\\{dialogue_name}') == False: 
+                    os.mkdir(os.getcwd() + f'\\result\\{dialogue_name}') # создание папки с названием диалога
 
+            if string.__contains__("userapi.com"): # нахождение строки с ссылкой
+                link = string[string.find(
+                    "href='")+6:(string[string.find("href='")+6::]).find("\'")+string.find("href='")+6:] # вычленение ссылки
+                filetype = define_file_type(link) # получение типа файла
+                create_file(link, filetype, dialogue_name, author_and_date) # функция создания файла
+
+#рекурсивный сбор файлов, имеющих расширение .html
 files = glob(os.getcwd() + '/**/*.html', recursive=True)
-#print(files)
+#создание папки результата
+if os.path.exists(os.getcwd()+'\\result') == False:
+    os.mkdir('result')
+#пробег по всем файлам
 for name in files:
     fullname = os.path.join(os.getcwd(), name)
-    if os.path.isfile(fullname) and ".html" in fullname:
-        match = ...
-        name_of_message = ...
-        working_with_file(fullname)
+    file_analysis(fullname)
