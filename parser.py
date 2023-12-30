@@ -5,12 +5,17 @@ import httplib2
 import re
 import uuid
 
-
 def find_dialogue_name(string):
     pattern = r'(?<=div><div class="ui_crumb" >)(.*?)(?=<\/div><\/div>)'
     try:
         match = re.search(pattern, string)
-        return match.group(0)
+        res = match.group(0)
+        ban_list = "\/:*?<>||"
+        for i in ban_list:
+            res = res.replace(i, " ") # разрешение создания названия файла
+        if progress == 25:
+            print(res)
+        return res
     except Exception as e:
         match = e
         return match
@@ -29,7 +34,9 @@ def parse_author_and_date(string):
         buf = re.sub(pattern, '', string)
         buf = buf.lstrip()
         buf = buf.rstrip() # очистка от лишних символов
-        buf = buf.replace(":", " ") # разрешение создания названия файла
+        ban_list = "\/:*?<>|"
+        for i in ban_list:
+            buf = buf.replace(i, " ") # разрешение создания названия файла
         list = [buf[:buf.find(",")], buf[buf.find(",") + 2:]] # отделение автора сообщения и даты/времени
         if(list[1] == ""):
             list[1] = "default"
@@ -44,15 +51,20 @@ def create_file(link, filetype, dialogue_name, author_and_date):
     if os.path.exists(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}') == False: # создание папки с автором сообщения
         os.mkdir(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}')
     h = httplib2.Http('.cache') # кэширование
-    response, content = h.request(link) # запрос
-    out = open(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}\\{author_and_date[1]}.{filetype}', 'wb') # создание файла в папку
-    out.write(content)
-    out.close()
+    try:
+        response, content = h.request(link) # запрос
+        out = open(f'result\\{dialogue_name}\\{filetype}\\{author_and_date[0]}\\{author_and_date[1]}.{filetype}', 'wb') # создание файла в папку
+        out.write(content)
+        out.close()
+    except Exception as e:
+        with open("log.txt", "w") as f:
+            f.write(f'Link: {link} | Filetype: {filetype} | Dialogue_name: {dialogue_name} | Author and date: {author_and_date[0] + author_and_date[1]} | k = {count}' + "\n\n")
 
 
 
 def file_analysis(fullname):
     #открытие файла
+    sleep(0.05)
     with open(fullname, 'r') as file:
         strings = file.readlines() # чтение файла
         dialogue_name = "default_name"
@@ -71,12 +83,18 @@ def file_analysis(fullname):
                 filetype = define_file_type(link) # получение типа файла
                 create_file(link, filetype, dialogue_name, author_and_date) # функция создания файла
 
+
+progress = 0
 #рекурсивный сбор файлов, имеющих расширение .html
 files = glob(os.getcwd() + '/**/*.html', recursive=True)
+count = len(files)
 #создание папки результата
 if os.path.exists(os.getcwd()+'\\result') == False:
     os.mkdir('result')
 #пробег по всем файлам
 for name in files:
+    progress += 1
     fullname = os.path.join(os.getcwd(), name)
+    sleep(0.5)
+    print("Анализ файла № " + str(progress) + "из " + str(count))
     file_analysis(fullname)
